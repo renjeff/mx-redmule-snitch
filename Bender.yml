@@ -8,23 +8,9 @@ package:
     - "msc25h32"
 
 dependencies:
-  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "939c3bdd"                                     }
-  snitch_cluster:     { git: "https://github.com/pulp-platform/snitch_cluster.git", rev: "5d6c957c70e3824e2330d8308eb904724cd41cbe" }
-  common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",   rev: "snitch"                         }
-  axi:                { git: "https://github.com/pulp-platform/axi.git",            version: "0.39.6"                     }
-  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: "0.4.5"                  }
-
-workspace:
-  package_links:
-    .deps/snitch_cluster: snitch_cluster
+  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "939c3bdd" }
 
 sources:
-  # Level 0: Generated files (run `make gen_rtl` to produce these)
-  - target: gen_rtl
-    files:
-      - .generated/snitch_cluster_pkg.sv
-      - .generated/snitch_cluster_wrapper.sv
-
   # Level 1
   - hw/snitch_hwpe_subsystem.sv
   - hw/snitch_tcdm_aligner.sv
