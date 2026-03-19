@@ -1,0 +1,33 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+package:
+  name: mx-redmule-snitch
+  authors:
+    - "msc25h32"
+
+dependencies:
+  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "939c3bdd"                                     }
+  snitch_cluster:     { git: "https://github.com/pulp-platform/snitch_cluster.git", rev: "5d6c957c70e3824e2330d8308eb904724cd41cbe" }
+  common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",   rev: "snitch"                         }
+  axi:                { git: "https://github.com/pulp-platform/axi.git",            version: "0.39.6"                     }
+  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: "0.4.5"                  }
+
+workspace:
+  package_links:
+    .deps/snitch_cluster: snitch_cluster
+
+sources:
+  # Level 0: Generated files (run `make gen_rtl` to produce these)
+  - target: gen_rtl
+    files:
+      - .generated/snitch_cluster_pkg.sv
+      - .generated/snitch_cluster_wrapper.sv
+
+  # Level 1
+  - hw/snitch_hwpe_subsystem.sv
+  - hw/snitch_tcdm_aligner.sv
+
+  # Level 2 (top)
+  - hw/cluster_tile.sv
