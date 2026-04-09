@@ -34,17 +34,14 @@ module snitch_hwpe_subsystem
   output periph_rsp_t hwpe_ctrl_rsp_o,
 
   // Core event interrupts
-  output logic [NrCores-1:0] hwpe_evt_o,
-
-  // FIXME: mx_exp_stream is currently drained and discarded (ready=1).
-  // Route exponent writes through RedMule's streamer/TCDM instead,
-  // so output MX exponents are written to memory alongside data.
-  output logic mx_exp_stream_busy_o
+  output logic [NrCores-1:0] hwpe_evt_o
 );
 
   // verilog_format: off
+  // DW must be DATA_W = 1024 + 32 (HwpeDataWidth + SysDataWidth),
+  // since redmule_top subtracts SysDataWidth to get DATAW_ALIGN.
   localparam hci_size_parameter_t HCISizeTcdm = '{
-    DW:  HwpeDataWidth,
+    DW:  HwpeDataWidth + 32,
     AW:  DEFAULT_AW,
     BW:  DEFAULT_BW,
     UW:  DEFAULT_UW,
@@ -63,42 +60,70 @@ module snitch_hwpe_subsystem
   // Machine HWPE Interrupt
   logic [NrCores-1:0] hwpe_evt_d, hwpe_evt_q;
 
+  // Read-data timing fix for the HWPE ctrl regfile.
+  //
+  // IO registers (addr >= 0x40, word >= 16) use the latch-based regfile
+  // whose output is combinational and only valid while req is asserted.
+  // We capture that value in periph_rdata_q on the request cycle.
+  //
+  // Mandatory registers (STATUS, FINISHED, etc., addr < 0x20, word < 8)
+  // use registered outputs inside hwpe_ctrl_regfile.sv.  Their data is
+  // only correct one cycle after the request — i.e. on the r_valid cycle.
+  // For these we use periph.r_data directly (it is stable at r_valid time).
+  //
+  // read_was_mandatory_q tracks which case applies so the response mux
+  // picks the right source.
+  logic [31:0] periph_rdata_q;
+  logic        read_was_mandatory_q;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (~rst_ni) begin
+      periph_rdata_q       <= '0;
+      read_was_mandatory_q <= '0;
+    end else if (periph.req && periph.gnt && periph.wen) begin
+      periph_rdata_q       <= periph.r_data;
+      read_was_mandatory_q <= (periph.add[7:2] <= 7);  // words 0-7 = mandatory+reserved
+    end
+  end
+
   hwpe_ctrl_intf_periph #(.ID_WIDTH(IdWidth)) periph (.clk(clk_i));
 
   hci_core_intf #(
 `ifndef SYNTHESIS
     .WAIVE_RSP3_ASSERT(1'b1),
 `endif
-    .DW               (HwpeDataWidth),
+    .DW               (HwpeDataWidth + 32),
     .EW               (0),
     .EHW              (0)
   ) tcdm (
     .clk(clk_i)
   );
 
-  // FIXME: mx_exp_stream drained here — exponent data is lost.
-  // Fix by routing through RedMule's streamer to TCDM.
-  hwpe_stream_intf_stream #(.DATA_WIDTH(32)) mx_exp_stream (.clk(clk_i));
-  assign mx_exp_stream.ready = 1'b1;
-  assign mx_exp_stream_busy_o = mx_exp_stream.valid;
+
+  // MX exponents now routed internally through RedMulE's streamer to TCDM.
 
   // Dummy XIF interface (unused — we use HWPE periph mode, X_EXT=0)
   cv32e40x_if_xif xif_dummy ();
 
   // ----- TCDM request/response mapping -----
+  // HCI DW is HwpeDataWidth+32 (1056) to satisfy RedMule's DATAW_ALIGN math,
+  // but the actual TCDM port is HwpeDataWidth (1024). Map the lower bits.
 
   // request channel
+  // Gate addr with req to prevent phantom bank conflicts in the TCDM
+  // interconnect when RedMule is idle (tcdm.add defaults to 0x0, which
+  // maps to bank 0 and blocks core accesses to TCDM base address).
   assign tcdm_req_o.q_valid = tcdm.req;
-  assign tcdm_req_o.q.addr  = tcdm.add;
+  assign tcdm_req_o.q.addr  = tcdm.req ? tcdm.add : '1;
   assign tcdm_req_o.q.write = ~tcdm.wen;
-  assign tcdm_req_o.q.strb  = tcdm.be;
-  assign tcdm_req_o.q.data  = tcdm.data;
+  assign tcdm_req_o.q.strb  = tcdm.be[HwpeDataWidth/8-1:0];
+  assign tcdm_req_o.q.data  = tcdm.data[HwpeDataWidth-1:0];
   assign tcdm_req_o.q.amo   = reqrsp_pkg::AMONone;
   assign tcdm_req_o.q.user  = '0;
   // response channel
   assign tcdm.gnt           = tcdm_rsp_i.q_ready;
   assign tcdm.r_valid       = tcdm_rsp_i.p_valid;
-  assign tcdm.r_data        = tcdm_rsp_i.p.data;
+  assign tcdm.r_data        = {{32{1'b0}}, tcdm_rsp_i.p.data};
   assign tcdm.r_opc         = '0;
   assign tcdm.r_user        = '0;
 
@@ -107,8 +132,10 @@ module snitch_hwpe_subsystem
   always_comb begin
     periph.req           = '0;
     hwpe_ctrl_rsp_o.q_ready = '0;
-    hwpe_ctrl_rsp_o.p.data  = '0;
-    hwpe_ctrl_rsp_o.p_valid = '0;
+    // Mandatory regs: use direct r_data (registered output, valid at r_valid).
+    // IO regs: use captured r_data from req cycle (latch output drops later).
+    hwpe_ctrl_rsp_o.p.data  = read_was_mandatory_q ? periph.r_data : periph_rdata_q;
+    hwpe_ctrl_rsp_o.p_valid = periph.r_valid;
 
     periph.add           = {24'h0, hwpe_ctrl_req_i.q.addr[7:0]};
     periph.wen           = ~hwpe_ctrl_req_i.q.write;
@@ -116,17 +143,18 @@ module snitch_hwpe_subsystem
     periph.data          = hwpe_ctrl_req_i.q.data;
     periph.id            = hwpe_ctrl_req_i.q.user;
 
-    // Clock enable register at 0x9C
+    // Clock enable register at 0x9C — immediate grant + response
     if (hwpe_ctrl_req_i.q.addr[7:0] == 'h9C) begin
       hwpe_ctrl_rsp_o.q_ready = hwpe_ctrl_req_i.q_valid;
-      hwpe_ctrl_rsp_o.p_valid = '1;
+      if (hwpe_ctrl_req_i.q_valid) begin
+        hwpe_ctrl_rsp_o.p_valid = 1'b1;
+      end
     end else begin
       periph.req              = hwpe_ctrl_req_i.q_valid;
       hwpe_ctrl_rsp_o.q_ready = periph.gnt;
-      hwpe_ctrl_rsp_o.p.data  = periph.r_data;
-      hwpe_ctrl_rsp_o.p_valid = periph.r_valid;
     end
   end
+
 
   // ----- Clock enable register -----
 
@@ -191,9 +219,7 @@ module snitch_hwpe_subsystem
     // HWPE periph control
     .periph             (periph),
     // TCDM data path
-    .tcdm               (tcdm),
-    // MX exponent stream
-    .mx_exp_stream      (mx_exp_stream)
+    .tcdm               (tcdm)
   );
 
 endmodule : snitch_hwpe_subsystem
