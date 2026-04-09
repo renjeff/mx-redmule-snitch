@@ -35,10 +35,7 @@ module cluster_tile
   output snitch_cluster_pkg::wide_out_req_t       wide_out_req_o,
   input  snitch_cluster_pkg::wide_out_resp_t      wide_out_resp_i,
   input  snitch_cluster_pkg::wide_in_req_t        wide_in_req_i,
-  output snitch_cluster_pkg::wide_in_resp_t       wide_in_resp_o,
-  // FIXME: MX exponent stream is currently drained inside snitch_hwpe_subsystem.
-  // Fix by routing exponent writes through RedMule's streamer/TCDM.
-  output logic                                    mx_exp_stream_busy_o
+  output snitch_cluster_pkg::wide_in_resp_t       wide_in_resp_o
 );
 
   // Tile-specific reset and clock signals
@@ -64,7 +61,7 @@ module cluster_tile
 
   `AXI_TYPEDEF_ALL(cluster_narrow_out_dw_conv, snitch_cluster_pkg::addr_t,
                    snitch_cluster_pkg::narrow_out_id_t, data_hwpe_ctrl_t, strb_hwpe_ctrl_t,
-                   snitch_cluster_pkg::user_t)
+                   snitch_cluster_pkg::user_narrow_t)
 
   cluster_narrow_out_dw_conv_req_t cluster_narrow_out_dw_conv_req, cluster_narrow_out_cut_req;
   cluster_narrow_out_dw_conv_resp_t cluster_narrow_out_dw_conv_rsp, cluster_narrow_out_cut_rsp;
@@ -85,6 +82,7 @@ module cluster_tile
     .msip_i,
     .hart_base_id_i,
     .cluster_base_addr_i,
+    .cluster_base_offset_i ('0),
     .mxip_i           (mxip),
     .clk_d2_bypass_i  ('0),
     .sram_cfgs_i      ('0),
@@ -96,6 +94,20 @@ module cluster_tile
     .wide_out_resp_i  (wide_out_resp_i),
     .wide_in_req_i    (wide_in_req_i),
     .wide_in_resp_o   (wide_in_resp_o),
+    .x_issue_resp_i   ('0),
+    .x_issue_ready_i  ('0),
+    .x_register_o     (),
+    .x_register_valid_o (),
+    .x_register_ready_i ('0),
+    .x_commit_o       (),
+    .x_commit_valid_o (),
+    .x_result_i       ('0),
+    .x_result_valid_i ('0),
+    .x_issue_req_o    (),
+    .x_issue_valid_o  (),
+    .x_result_ready_o (),
+    .dca_req_i        ('0),
+    .dca_rsp_o        (),
     .narrow_ext_req_o (cluster_narrow_ext_req),
     .narrow_ext_resp_i(cluster_narrow_ext_rsp),
     .tcdm_ext_req_i   (cluster_tcdm_ext_req_aligned),
@@ -200,8 +212,7 @@ module cluster_tile
     .tcdm_rsp_i      (cluster_tcdm_ext_rsp_misaligned),
     .hwpe_ctrl_req_i (hwpectrl_req),
     .hwpe_ctrl_rsp_o (hwpectrl_rsp),
-    .hwpe_evt_o      (mxip),
-    .mx_exp_stream_busy_o (mx_exp_stream_busy_o)
+    .hwpe_evt_o      (mxip)
   );
 
   //////////////////////////
