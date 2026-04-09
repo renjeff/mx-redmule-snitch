@@ -9,6 +9,7 @@ package:
 
 dependencies:
   redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "a966552" }
+  hci:                { git: "https://github.com/pulp-platform/hci.git", rev: "f7fbfcd" }
 
 sources:
   # Level 1
