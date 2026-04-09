@@ -8,7 +8,7 @@ package:
     - "msc25h32"
 
 dependencies:
-  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "a17b2dd" }
+  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "b5410cd" }
   hci:                { git: "https://github.com/pulp-platform/hci.git", rev: "f7fbfcd" }
 
 # hw files (cluster_tile.sv, snitch_hwpe_subsystem.sv, snitch_tcdm_aligner.sv)
