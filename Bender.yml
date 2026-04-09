@@ -8,7 +8,7 @@ package:
     - "msc25h32"
 
 dependencies:
-  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "939c3bdd" }
+  redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "e34cea93" }
 
 sources:
   # Level 1
