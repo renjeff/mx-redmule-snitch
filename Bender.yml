@@ -11,6 +11,11 @@ dependencies:
   redmule:            { git: "https://github.com/renjeff/redmule.git", rev: "b5410cd" }
   hci:                { git: "https://github.com/pulp-platform/hci.git", rev: "f7fbfcd" }
 
-# hw files (cluster_tile.sv, snitch_hwpe_subsystem.sv, snitch_tcdm_aligner.sv)
-# are compiled by the parent snitch_cluster package where all dependencies
-# (reqrsp_pkg, hwpe_ctrl_package, axi, etc.) are available.
+sources:
+  # All hw files are compiled by the parent snitch_cluster package
+  # (they depend on snitch_cluster_pkg and reqrsp_pkg defined there)
+  - target: mx_redmule_snitch_hw
+    files:
+      - hw/snitch_hwpe_subsystem.sv
+      - hw/snitch_tcdm_aligner.sv
+      - hw/cluster_tile.sv
